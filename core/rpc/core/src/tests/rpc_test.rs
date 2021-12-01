@@ -1242,6 +1242,19 @@ async fn test_build_record_id() {
 }
 
 #[test]
+async fn test_build_record_id_with_address() {
+    let record_id = new_record_id(
+        "4329e4c751c95384a51072d4cbc9911a101fd08fc32c687353d016bf38b8b22c",
+        0,
+        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqvrnuvqd6zmgrqn60rnsesy23mvex5vy9q0g8hfd",
+    );
+    let record_id_string = hex::encode(record_id.to_vec());
+    println!("record_id_string: {:?}", record_id_string);
+    assert_eq!("4329e4c751c95384a51072d4cbc9911a101fd08fc32c687353d016bf38b8b22c0000000000636b7431717a646130637230386d38356863386a6c6e6670337a65723778756c656a79777434396b74327272307674687977616135307877737176726e75767164367a6d6772716e3630726e7365737932336d7665783576793971306738686664".to_string(),
+    record_id_string);
+}
+
+#[test]
 async fn test_build_ckb_secp_transfer_transaction_with_fee_rate() {
     let net_ty = NetworkType::Testnet;
     let rpc = new_rpc(net_ty).await;
