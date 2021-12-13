@@ -248,24 +248,26 @@ fn print_cell_output(net_ty: NetworkType, output_cell: CellOutput, data: Bytes) 
 // #[test]
 // async fn test_get_secp_address_by_item() {}
 
-// #[test]
-// async fn test_get_live_cells_by_identity() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     let identity = new_identity("ckt1qyqg3lvz8c8k7llaw8pzxjphkygfrllumymquvc562");
-//     let cells = rpc
-//         .get_live_cells_by_item(
-//             Item::Identity(identity),
-//             HashSet::new(),
-//             None,
-//             None,
-//             None,
-//             None,
-//             false,
-//         )
-//         .await
-//         .unwrap();
-//     print_cells(&rpc, cells);
-// }
+#[test]
+async fn test_get_live_cells_by_identity() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+
+    let item = JsonItem::Identity("0x00a3b8598e1d53e6c5e89e8acb6b4c34d3adb13f2b".to_string());
+    let cells = rpc
+        .get_live_cells_by_item(
+            Context::new(),
+            Item::try_from(item).unwrap(),
+            HashSet::new(),
+            None,
+            None,
+            None,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+    print_cells(&rpc, cells);
+}
 
 // #[test]
 // async fn test_get_live_cells_by_address() {
@@ -1318,6 +1320,44 @@ async fn test_build_ckb_secp_transfer_transaction_with_change_with_fee_rate() {
         },
         pay_fee: Some("ckt1qyqqtg06h75ymw098r3w0l3u4xklsj04tnsqctqrmc".to_string()),
         change: Some(change),
+        fee_rate: Some(1000),
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_ckb_secp_transfer_transaction_with_fee_rate_identity() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+
+    let item = JsonItem::Identity("0x00a3b8598e1d53e6c5e89e8acb6b4c34d3adb13f2b".to_string());
+    let items = vec![item];
+
+    let to_info = ToInfo {
+        address: "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqg3ck4edchwv40gz7xsv0vygt9lc3jw04q4vqvcz".to_string(),
+        amount: "15000000000".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: Some("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqd0pdquvfuq077aemn447shf4d8u5f4a0glzz2g4".to_string()),
+        change: None,
         fee_rate: Some(1000),
         since: None,
     };
