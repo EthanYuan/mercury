@@ -347,37 +347,53 @@ async fn test_get_live_cells_by_identity() {
 // #[test]
 // async fn test_generate_ckb_address_or_lock_hash() {}
 
-// #[test]
-// async fn test_get_balance_by_address() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     init_tip(&rpc, None).await;
-//     let item = JsonItem::Address("ckt1qypyfy67hjrqmcyzs2cpvdfhd9lx6mgc68aqjx5d7w".to_string());
-//     let asset_infos = HashSet::new();
-//     let payload = GetBalancePayload {
-//         item,
-//         asset_infos,
-//         tip_block_number: None,
-//     };
-//     let balances = rpc.inner_get_balance(payload).await;
-//     print_balances(balances.unwrap().balances);
-// }
+#[test]
+async fn test_get_balance_by_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1qypyfy67hjrqmcyzs2cpvdfhd9lx6mgc68aqjx5d7w".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
 
-// #[test]
-// async fn test_get_balance_by_identity() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     init_tip(&rpc, None).await;
 
-//     let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
-//     let item = JsonItem::Identity(hex::encode(identity.0));
-//     let asset_infos = HashSet::new();
-//     let payload = GetBalancePayload {
-//         item,
-//         asset_infos,
-//         tip_block_number: None,
-//     };
-//     let balances = rpc.inner_get_balance(payload).await;
-//     print_balances(balances.unwrap().balances);
-// }
+#[test]
+async fn test_get_balance_by_address_2() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_identity() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
 
 // #[test]
 // async fn test_get_balance_by_record_id() {
@@ -1184,6 +1200,65 @@ async fn test_build_dao_claim_transaction() {
         .unwrap();
     pretty_print(&tx);
     pretty_print_raw_tx(net_ty, &rpc, tx).await;
+}
+
+#[test]
+async fn test_build_dao_claim_transaction_with_address() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let item = JsonItem::Address("ckt1qyqq4x8yqvfggzazwn49t8h2mv4y8py5ppxs04kctp".to_string());
+
+    let payload = DaoClaimPayload {
+        from: item,
+        to: None,
+        fee_rate: Some(1000),
+    };
+    pretty_print(&payload);
+    let tx = rpc
+        .inner_build_dao_claim_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print(&tx);
+    pretty_print_raw_tx(net_ty, &rpc, tx).await;
+}
+
+#[test]
+async fn test_build_ckb_secp_transfer_transaction_with_claim_dao_cell() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+    let items = vec![JsonItem::Address(
+        "ckt1qyqq4x8yqvfggzazwn49t8h2mv4y8py5ppxs04kctp".to_string(),
+    )];
+    let to_info = ToInfo {
+        address: "ckt1qyqg88ccqm59ksxp85788pnqg4rkejdgcg2qxcu2qf".to_string(),
+        amount: "10000000000".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: Some(1000),
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 }
 
 #[test]
