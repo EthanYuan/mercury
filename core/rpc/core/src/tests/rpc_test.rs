@@ -1490,6 +1490,44 @@ async fn test_build_ckb_secp_transfer_transaction_with_fee_rate_identity() {
 }
 
 #[test]
+async fn test_build_ckb_secp_transfer_transaction_with_sudt_cell() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+
+    let identity = new_identity("ckt1qyq28wze3cw48ek9az0g4jmtfs6d8td38u4s6hp2s0");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qyqv2w7f5kuctnt03kk9l09gwuuy6wpys64s4f8vve".to_string(),
+        amount: "24517556405762".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
 async fn test_build_ckb_acp_transfer() {
     let net_ty = NetworkType::Testnet;
     let rpc = new_rpc(net_ty).await;
