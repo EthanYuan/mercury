@@ -13,9 +13,9 @@ use core::convert::From;
 use core_rpc_types::lazy::{CURRENT_BLOCK_NUMBER, CURRENT_EPOCH_NUMBER};
 use core_rpc_types::{
     decode_record_id, encode_record_id, AssetInfo, AssetType, Balance, DaoClaimPayload,
-    From as From2, GetBalancePayload, GetBlockInfoPayload, Identity, IdentityFlag, Item, JsonItem,
-    Mode, Ownership, Record, RecordId, SinceConfig, SinceFlag, SinceType, Source, To, ToInfo,
-    TransactionInfo,
+    DaoWithdrawPayload, From as From2, GetBalancePayload, GetBlockInfoPayload, Identity,
+    IdentityFlag, Item, JsonItem, Mode, Ownership, Record, RecordId, SinceConfig, SinceFlag,
+    SinceType, Source, To, ToInfo, TransactionInfo,
 };
 use serde::Serialize;
 use tokio::test;
@@ -643,6 +643,31 @@ async fn test_get_live_cells_by_identity() {
 //     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 // }
 
+#[test]
+async fn test_build_dao_deposit() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+
+    let items = vec![JsonItem::Address(
+        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqfqyerlanzmnkxtmd9ww9n7gr66k8jt4tclm9jnk".to_string(),
+    )];
+    let payload = DaoDepositPayload {
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: None,
+        amount: 200_00000000,
+        fee_rate: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_dao_deposit_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
 // // select encode(tx_hash, 'hex') from mercury_live_cell where type_code_hash = decode('82d76d1b75fe2fd9a27dfbaa65a039221a380d76c926f378d3f81cf3e7e13f2e', 'hex') and data != decode('0000000000000000', 'hex') limit 10;
 // #[test]
 // async fn test_build_withdraw() {
@@ -661,6 +686,26 @@ async fn test_get_live_cells_by_identity() {
 //     let raw_transaction = rpc.inner_build_withdraw_transaction(payload).await.unwrap();
 //     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 // }
+
+#[test]
+async fn test_build_dao_withdraw() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let items = JsonItem::Address("ckt1qyqzqfj8lmx9h8vvhk62uut8us844v0yh2hsnqvvgc".to_string());
+    let payload = DaoWithdrawPayload {
+        from: items,
+        pay_fee: None,
+        fee_rate: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_dao_withdraw_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
 
 // #[test]
 // async fn test_build_transfer_with_ckb_and_hold_by_from() {
