@@ -234,6 +234,13 @@ fn print_cell_output(net_ty: NetworkType, output_cell: CellOutput, data: Bytes) 
     );
 }
 
+#[test]
+async fn test_get_tip() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let tip = rpc.inner_get_tip(Context::new()).await.unwrap().unwrap();
+    println!("tip: {:?}", tip);
+}
+
 // #[test]
 // async fn test_get_scripts_by_identity() {
 //     let rpc = new_rpc(NetworkType::Testnet).await;
@@ -531,7 +538,7 @@ async fn test_get_block_info_of_block_number() {
     let rpc = new_rpc(NetworkType::Testnet).await;
 
     let payload = GetBlockInfoPayload {
-        block_number: Some(3804095),
+        block_number: Some(3804091),
         block_hash: None,
     };
     let block_info = rpc
@@ -596,49 +603,58 @@ async fn test_get_block_info_of_block_number() {
 //     print_transaction_infos(vec![transaction.transaction.unwrap()]);
 // }
 
-// #[test]
-// async fn test_get_transaction_info() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
+#[test]
+async fn test_get_transaction_info() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
 
-//     let tx_hash =
-//         H256::from_str("4329e4c751c95384a51072d4cbc9911a101fd08fc32c687353d016bf38b8b22c").unwrap();
-//     let transaction = rpc.inner_get_transaction_info(tx_hash).await.unwrap();
-//     print_transaction_infos(vec![transaction.transaction.unwrap()]);
-// }
+    let tx_hash =
+        H256::from_str("5dd54476569c25dcb004abe41f9c1b0f8049e666f3f6a749b449d5dc9551504f").unwrap();
+    let transaction = rpc
+        .inner_get_transaction_info(Context::new(), tx_hash)
+        .await
+        .unwrap();
+    print_transaction_infos(vec![transaction.transaction.unwrap()]);
+}
 
-// #[test]
-// async fn test_get_spent_transaction_with_double_entry() {
-//     let rpc = new_rpc(NetworkType::Mainnet).await;
+#[test]
+async fn test_get_spent_transaction_with_double_entry() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
 
-//     let payload = GetSpentTransactionPayload {
-//         outpoint: new_outpoint(
-//             "244cc8e21f155562891eb2731b1c27e47d307e657b7be9630119eb724bbaec1c",
-//             1,
-//         )
-//         .into(),
-//         structure_type: StructureType::DoubleEntry,
-//     };
+    let payload = GetSpentTransactionPayload {
+        outpoint: new_outpoint(
+            "635f214cdab44251000c2f1b631869a0660be1873174ed1f4cc9cdfff77fbb43",
+            1,
+        )
+        .into(),
+        structure_type: StructureType::DoubleEntry,
+    };
 
-//     let transaction = rpc.inner_get_spent_transaction(payload).await.unwrap();
-//     println!("transaction: {:?}", transaction);
-// }
+    let transaction = rpc
+        .inner_get_spent_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    println!("transaction: {:?}", transaction);
+}
 
-// #[test]
-// async fn test_get_spent_transaction_with_native_type() {
-//     let rpc = new_rpc(NetworkType::Mainnet).await;
+#[test]
+async fn test_get_spent_transaction_with_native_type() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
 
-//     let payload = GetSpentTransactionPayload {
-//         outpoint: new_outpoint(
-//             "244cc8e21f155562891eb2731b1c27e47d307e657b7be9630119eb724bbaec1c",
-//             1,
-//         )
-//         .into(),
-//         structure_type: StructureType::Native,
-//     };
+    let payload = GetSpentTransactionPayload {
+        outpoint: new_outpoint(
+            "635f214cdab44251000c2f1b631869a0660be1873174ed1f4cc9cdfff77fbb43",
+            1,
+        )
+        .into(),
+        structure_type: StructureType::Native,
+    };
 
-//     let transaction = rpc.inner_get_spent_transaction(payload).await.unwrap();
-//     println!("transaction: {:?}", transaction);
-// }
+    let transaction = rpc
+        .inner_get_spent_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    println!("transaction: {:?}", transaction);
+}
 
 // #[test]
 // async fn test_build_deposit() {
@@ -1853,4 +1869,15 @@ async fn test_register_addresses() {
     let raw_transaction = rpc.register_addresses(addresses).await.unwrap();
     let lock_hash = H160::from_str("ca9fc3cbc670e67451e920e6f57c647f529e567f").unwrap();
     assert_eq!(lock_hash, raw_transaction[0]);
+}
+
+#[test]
+async fn test_register_addresses_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let addresses = vec!["ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string()];
+    let raw_transaction = rpc.register_addresses(addresses).await.unwrap();
+    println!("raw_transaction: {:?}", raw_transaction);
 }
