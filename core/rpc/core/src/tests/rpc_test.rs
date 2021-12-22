@@ -263,6 +263,7 @@ async fn test_get_live_cells_by_identity() {
             None,
             None,
             false,
+            &mut PaginationRequest::default(),
         )
         .await
         .unwrap();
@@ -361,7 +362,6 @@ async fn test_get_balance_by_address() {
     let balances = rpc.inner_get_balance(Context::new(), payload).await;
     print_balances(balances.unwrap().balances);
 }
-
 
 #[test]
 async fn test_get_balance_by_address_2() {
@@ -526,17 +526,20 @@ async fn test_get_balance_by_identity() {
 //     print_block_info(block_info);
 // }
 
-// #[test]
-// async fn test_get_block_info_of_block_number() {
-//     let rpc = new_rpc(NetworkType::Mainnet).await;
+#[test]
+async fn test_get_block_info_of_block_number() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
 
-//     let payload = GetBlockInfoPayload {
-//         block_number: Some(5369644),
-//         block_hash: None,
-//     };
-//     let block_info = rpc.inner_get_block_info(payload).await.unwrap();
-//     print_block_info(block_info);
-// }
+    let payload = GetBlockInfoPayload {
+        block_number: Some(3804095),
+        block_hash: None,
+    };
+    let block_info = rpc
+        .inner_get_block_info(Context::new(), payload)
+        .await
+        .unwrap();
+    print_block_info(block_info);
+}
 
 // #[test]
 // async fn test_get_block_info_of_block_hash() {
