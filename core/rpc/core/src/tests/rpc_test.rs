@@ -1307,18 +1307,28 @@ async fn test_get_balance_by_record_id_address() {
     init_tip(&rpc, None).await;
 
     let record_id = new_record_id(
-        "fc43d8bdfff3051f3c908cd137e0766eecba4e88ae5786760c3e0e0f1d76c004",
-        2,
-        "ckt1qyqg88ccqm59ksxp85788pnqg4rkejdgcg2qxcu2qf",
+        "0a7df580b534769fc9933e904300da6aadfa61cebb95805d07ae5bcebefe9c56",
+        1,
+        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqf3dm7hhmpwrze2semwa5fv2zusw94e9vs4vxmyz",
     );
     let record_id = hex::encode(record_id.to_vec());
     println!("{:?}", record_id);
     let item = JsonItem::Record(record_id);
+
     let asset_infos = HashSet::new();
+    // let assert_info = AssetInfo {
+    //     asset_type: AssetType::UDT,
+    //     udt_hash: H256::from_str(
+    //         "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
+    //     )
+    //     .unwrap(),
+    // };
+    // asset_infos.insert(assert_info);
+
     let payload = GetBalancePayload {
         item,
         asset_infos,
-        tip_block_number: None,
+        tip_block_number: Some(3818475),
     };
     let balances = rpc.inner_get_balance(Context::new(), payload).await;
     print_balances(balances.unwrap().balances);
