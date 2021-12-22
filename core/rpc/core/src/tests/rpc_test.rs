@@ -12,7 +12,7 @@ use common::{Address, DetailedCell, NetworkType, Order, PaginationRequest, Range
 use core::convert::From;
 use core_rpc_types::lazy::{CURRENT_BLOCK_NUMBER, CURRENT_EPOCH_NUMBER};
 use core_rpc_types::{
-    decode_record_id, encode_record_id, AssetInfo, AssetType, Balance, DaoClaimPayload,
+    decode_record_id, encode_record_id, indexer, AssetInfo, AssetType, Balance, DaoClaimPayload,
     DaoWithdrawPayload, From as From2, GetBalancePayload, GetBlockInfoPayload, Identity,
     IdentityFlag, Item, JsonItem, Mode, Ownership, Record, RecordId, SinceConfig, SinceFlag,
     SinceType, Source, To, ToInfo, TransactionInfo,
@@ -239,6 +239,171 @@ async fn test_get_tip() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     let tip = rpc.inner_get_tip(Context::new()).await.unwrap().unwrap();
     println!("tip: {:?}", tip);
+}
+
+#[test]
+async fn test_get_cells() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let search_key = indexer::SearchKey {
+        script: script.into(),
+        script_type: indexer::ScriptType::Lock,
+        filter: None,
+    };
+
+    let res = rpc
+        .get_cells(search_key, indexer::Order::Desc, 1.into(), None)
+        .await
+        .unwrap();
+    println!("res: {:?}", res);
+}
+
+#[test]
+async fn test_get_cells_capacity() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let search_key = indexer::SearchKey {
+        script: script.into(),
+        script_type: indexer::ScriptType::Lock,
+        filter: None,
+    };
+
+    let res = rpc.get_cells_capacity(search_key).await.unwrap();
+    println!("res: {:?}", res);
+}
+
+#[test]
+async fn test_get_transactions() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let search_key = indexer::SearchKey {
+        script: script.into(),
+        script_type: indexer::ScriptType::Lock,
+        filter: None,
+    };
+
+    let res = rpc
+        .get_transactions(search_key, indexer::Order::Desc, 3.into(), None)
+        .await
+        .unwrap();
+    println!("res: {:?}", res);
+}
+
+#[test]
+async fn test_get_live_cells_by_lock_hash() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let res = rpc
+        .get_live_cells_by_lock_hash(script.calc_script_hash().unpack(), 1.into(), 3.into(), None)
+        .await
+        .unwrap();
+    println!("res: {:?}", res);
+}
+
+#[test]
+async fn test_get_capacity_by_lock_hash() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let res = rpc
+        .get_capacity_by_lock_hash(script.calc_script_hash().unpack())
+        .await
+        .unwrap();
+    println!("res: {:?}", res);
+}
+
+#[test]
+async fn test_get_transactions_by_lock_hash() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let script = packed::Script::new_builder()
+        .hash_type(ScriptHashType::Type.into())
+        .code_hash(
+            h256!("0x58c5f491aba6d61678b7cf7edf4910b1f5e00ec0cde2f42e0abb4fd9aff25a63").pack(),
+        )
+        .args(
+            ckb_types::bytes::Bytes::from(
+                h160!("0x6ce722487277b00a0852a943ba3fd5ee03ccca06").as_bytes(),
+            )
+            .pack(),
+        )
+        .build();
+
+    let res = rpc
+        .get_transactions_by_lock_hash(script.calc_script_hash().unpack(), 1.into(), 3.into(), None)
+        .await
+        .unwrap();
+    println!("res: {:?}", res);
 }
 
 // #[test]
