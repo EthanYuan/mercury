@@ -13,7 +13,7 @@ use core::convert::From;
 use core_rpc_types::lazy::{CURRENT_BLOCK_NUMBER, CURRENT_EPOCH_NUMBER};
 use core_rpc_types::{
     decode_record_id, encode_record_id, indexer, AssetInfo, AssetType, Balance, DaoClaimPayload,
-    DaoWithdrawPayload, From as From2, GetBalancePayload, GetBlockInfoPayload, Identity,
+    DaoWithdrawPayload, ExtraType, From as From2, GetBalancePayload, GetBlockInfoPayload, Identity,
     IdentityFlag, Item, JsonItem, Mode, Ownership, Record, RecordId, SinceConfig, SinceFlag,
     SinceType, Source, To, ToInfo, TransactionInfo,
 };
@@ -406,13 +406,17 @@ async fn test_get_transactions_by_lock_hash() {
     println!("res: {:?}", res);
 }
 
-// #[test]
-// async fn test_get_scripts_by_identity() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     let identity = new_identity("ckt1qyqg3lvz8c8k7llaw8pzxjphkygfrllumymquvc562");
-//     let scripts = rpc.get_scripts_by_identity(identity, None).await.unwrap();
-//     print_scripts(&rpc, scripts);
-// }
+#[test]
+async fn test_get_scripts_by_identity() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let identity = new_identity("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq06y24q4tc4tfkgze35cc23yprtpzfrzygljdjh9");
+    println!("{:?}", identity);
+    let scripts = rpc
+        .get_scripts_by_identity(Context::new(), identity, None)
+        .await
+        .unwrap();
+    print_scripts(&rpc, scripts);
+}
 
 // #[test]
 // async fn test_get_scripts_by_address() {}
@@ -1211,25 +1215,53 @@ async fn test_build_transfer_with_udt_and_hold_by_to() {
     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 }
 
-// {"item":{"Identity":"0x001a4ff63598e43af9cd42324abb7657fa849c5bc3"},"asset_infos":[],
-// "block_range":{"from":2778109,"to":2778110},"pagination":{"order":"desc","limit":50,"return_count":false}}
-// 0x5d1ca3166fe6a289bdbbf5cdeb36407ea767a5ebbae6ffb413feaa53fcdf538f
-// 0x1a4ff63598e43af9cd42324abb7657fa849c5bc3
 #[test]
 async fn test_query_transactions() {
     let net_ty = NetworkType::Testnet;
     let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let mut asset_infos = HashSet::new();
+    asset_infos.insert(AssetInfo::new_ckb());
 
     let payload = QueryTransactionsPayload {
-        item: JsonItem::Identity("001a4ff63598e43af9cd42324abb7657fa849c5bc3".to_string()),
-        asset_infos: HashSet::new(),
+        item: JsonItem::Address("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqw6vjzy9kahx3lyvlgap8dp8ewd8g80pcgcexzrj".to_string()),
+        asset_infos,
         extra: None,
-        block_range: Some(Range {
-            from: 2778109,
-            to: 2778110,
-        }),
+        block_range: None,
         pagination: PaginationRequest {
-            cursor: Some(ckb_types::bytes::Bytes::from(1i64.to_be_bytes().to_vec())),
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(50),
+            skip: None,
+            return_count: false,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc.inner_query_transactions(Context::new(), payload).await;
+    println!("{:?}", transactions);
+}
+
+#[test]
+async fn test_query_transactions_by_identity() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_infos = HashSet::new();
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Identity("0x00fa22aa0aaf155a6c816634c61512046b08923111".to_string()),
+        asset_infos,
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
             order: Order::Desc,
             limit: Some(50),
             skip: None,
@@ -1237,11 +1269,172 @@ async fn test_query_transactions() {
         },
         structure_type: StructureType::DoubleEntry,
     };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    println!("transactions: {:?}", transactions);
+    let _json_string = serde_json::to_string_pretty(&transactions).unwrap();
+}
+
+#[test]
+async fn test_query_transactions_with_extra() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let mut asset_infos = HashSet::new();
+    asset_infos.insert(AssetInfo::new_ckb());
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Address("ckt1qyqrc4wkvc95f2wxguxaafwtgavpuqnqkxzqs0375w".to_string()),
+        asset_infos,
+        extra: Some(ExtraType::Dao),
+        block_range: Some(Range::new(0, 30000)),
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(50),
+            skip: None,
+            return_count: true,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
     let transactions = rpc.inner_query_transactions(Context::new(), payload).await;
     println!("{:?}", transactions);
+}
 
-    //     let json_string = serde_json::to_string_pretty(&transactions).unwrap();
-    //     println!("{}", json_string);
+#[test]
+async fn test_query_transactions_with_record() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let mut asset_infos = HashSet::new();
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+    asset_infos.insert(asset_info);
+
+    // decode record_id
+    let record_id = "3eb0a1974dd6a2b6c3ba220169cef6eec21e94d2267fab9a4e810accc693c8ed0000000000636b7431717136706e6777716e366539766c6d393274683834726b306c346a703268386c757263686a6d6e7776386b71337274357073663476713036793234713474633474666b677a6533356363323379707274707a66727a79677370746b7a6e".to_string();
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Record(record_id),
+        asset_infos,
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(50),
+            skip: None,
+            return_count: true,
+        },
+        structure_type: StructureType::Native,
+    };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    let json_string = serde_json::to_string_pretty(&transactions).unwrap();
+    println!("{}", json_string);
+}
+
+#[test]
+async fn test_query_transactions_first() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Address("ckt1qq6pngwqn6e9vlm92th84rk0l4jp2h8lurchjmnwv8kq3rt5psf4vq06y24q4tc4tfkgze35cc23yprtpzfrzygsptkzn".to_string()),
+        asset_infos: HashSet::new(),
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(1),
+            skip: None,
+            return_count: false,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    let json_string = serde_json::to_string_pretty(&transactions).unwrap();
+    println!("{}", json_string);
+}
+
+#[test]
+async fn test_query_transactions_second() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Address("ckt1qq6pngwqn6e9vlm92th84rk0l4jp2h8lurchjmnwv8kq3rt5psf4vq06y24q4tc4tfkgze35cc23yprtpzfrzygsptkzn".to_string()),
+        asset_infos: HashSet::new(),
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [0, 57, 127, 49, 0, 0, 0, 11].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(2),
+            skip: None,
+            return_count: false,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    let json_string = serde_json::to_string_pretty(&transactions).unwrap();
+    println!("{}", json_string);
+}
+
+#[test]
+async fn test_query_transactions_third() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Address("ckt1qq6pngwqn6e9vlm92th84rk0l4jp2h8lurchjmnwv8kq3rt5psf4vq06y24q4tc4tfkgze35cc23yprtpzfrzygsptkzn".to_string()),
+        asset_infos: HashSet::new(),
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [0, 57, 125, 52, 0, 0, 0, 217].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(2),
+            skip: None,
+            return_count: false,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    let json_string = serde_json::to_string_pretty(&transactions).unwrap();
+    println!("{}", json_string);
 }
 
 // #[test]
