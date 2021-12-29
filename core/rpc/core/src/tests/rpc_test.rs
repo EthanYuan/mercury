@@ -428,22 +428,78 @@ async fn test_get_scripts_by_identity() {
 async fn test_get_live_cells_by_identity() {
     let rpc = new_rpc(NetworkType::Testnet).await;
 
-    let item = JsonItem::Identity("0x00a3b8598e1d53e6c5e89e8acb6b4c34d3adb13f2b".to_string());
+    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+
+    // 3
+    let mut page = PaginationRequest::default();
+    page.set_limit(Some(3));
     let cells = rpc
         .get_live_cells_by_item(
             Context::new(),
-            Item::try_from(item).unwrap(),
+            Item::Identity(identity.clone()),
             HashSet::new(),
             None,
             None,
-            None,
+            Some((**SECP256K1_CODE_HASH.load()).clone()),
             None,
             false,
-            &mut PaginationRequest::default(),
+            &mut page,
         )
         .await
         .unwrap();
-    print_cells(&rpc, cells);
+
+    assert_eq!(3, cells.len());
+    println!("page after get: {:?}", page);
+    print_cells(&rpc, cells.clone());
+    println!();
+
+    // first 2
+    let mut page = PaginationRequest::default();
+    page.set_limit(Some(2));
+    let mut cells_1 = rpc
+        .get_live_cells_by_item(
+            Context::new(),
+            Item::Identity(identity.clone()),
+            HashSet::new(),
+            None,
+            None,
+            Some((**SECP256K1_CODE_HASH.load()).clone()),
+            None,
+            false,
+            &mut page,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(2, cells_1.len());
+    println!("page after get: {:?}", page);
+    print_cells(&rpc, cells_1.clone());
+    println!();
+
+    // second 1
+    page.set_limit(Some(1));
+    let cells_2 = rpc
+        .get_live_cells_by_item(
+            Context::new(),
+            Item::Identity(identity),
+            HashSet::new(),
+            None,
+            None,
+            Some((**SECP256K1_CODE_HASH.load()).clone()),
+            None,
+            false,
+            &mut page,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(1, cells_2.len());
+    println!("page after get: {:?}", page);
+    print_cells(&rpc, cells_2.clone());
+    println!();
+
+    cells_1.extend(cells_2);
+    assert_eq!(cells, cells_1)
 }
 
 // #[test]
@@ -705,6 +761,7 @@ async fn test_get_balance_by_identity() {
 #[test]
 async fn test_get_block_info_of_block_number() {
     let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
 
     let payload = GetBlockInfoPayload {
         block_number: Some(3804091),
@@ -775,6 +832,7 @@ async fn test_get_block_info_of_block_number() {
 #[test]
 async fn test_get_transaction_info() {
     let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
 
     let tx_hash =
         H256::from_str("5dd54476569c25dcb004abe41f9c1b0f8049e666f3f6a749b449d5dc9551504f").unwrap();
@@ -788,6 +846,7 @@ async fn test_get_transaction_info() {
 #[test]
 async fn test_get_spent_transaction_with_double_entry() {
     let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
 
     let payload = GetSpentTransactionPayload {
         outpoint: new_outpoint(
