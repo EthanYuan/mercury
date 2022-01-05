@@ -121,7 +121,7 @@ async fn init_tip(rpc: &MercuryRpcImpl<CkbRpcClient>, tip_block_number: Option<B
 fn print_scripts(rpc: &MercuryRpcImpl<CkbRpcClient>, scripts: Vec<Script>) {
     for script in scripts {
         let address = rpc.script_to_address(&script);
-        println!("{}", address.to_string());
+        println!("address: {}", address.to_string());
     }
 }
 
@@ -418,11 +418,73 @@ async fn test_get_scripts_by_identity() {
     print_scripts(&rpc, scripts);
 }
 
-// #[test]
-// async fn test_get_scripts_by_address() {}
+#[test]
+async fn test_get_scripts_by_address_acp() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let address = Address::from_str("ckt1qq6pngwqn6e9vlm92th84rk0l4jp2h8lurchjmnwv8kq3rt5psf4vq06y24q4tc4tfkgze35cc23yprtpzfrzygsptkzn").unwrap();
+    let scripts = rpc
+        .get_scripts_by_address(Context::new(), &address, None)
+        .await
+        .unwrap();
+    println!("scripts: {:?}", scripts);
+    print_scripts(&rpc, scripts);
+}
 
-// #[test]
-// async fn test_get_secp_address_by_item() {}
+#[test]
+async fn test_get_scripts_by_address_cheque() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let address = Address::from_str("ckt1qpsdtuu7lnjqn3v8ew02xkwwlh4dv5x2z28shkwt8p2nfruccux4kq29yywse6zu05ez3s64xmtdkl6074rac6zh7h2ln2w035d2lnh32ylk5ydmjq5ypwqs4asnr").unwrap();
+    let scripts = rpc
+        .get_scripts_by_address(Context::new(), &address, None)
+        .await
+        .unwrap();
+    println!("scripts: {:?}", scripts);
+    print_scripts(&rpc, scripts);
+}
+
+#[test]
+async fn test_get_transactions_by_item_cheque_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let item = JsonItem::Address("ckt1qpsdtuu7lnjqn3v8ew02xkwwlh4dv5x2z28shkwt8p2nfruccux4kq29yywse6zu05ez3s64xmtdkl6074rac6zh7h2ln2w035d2lnh32ylk5ydmjq5ypwqs4asnr".to_string());
+    let item = Item::try_from(item).unwrap();
+    let asset_infos = HashSet::new();
+
+    let ret = rpc
+        .get_transactions_by_item(
+            Context::new(),
+            item,
+            asset_infos,
+            None,
+            None,
+            PaginationRequest::default(),
+        )
+        .await;
+    println!("ret: {:?}", ret);
+}
+
+#[test]
+async fn test_get_secp_address_by_item_acp_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let item = JsonItem::Address("ckt1qq6pngwqn6e9vlm92th84rk0l4jp2h8lurchjmnwv8kq3rt5psf4vq06y24q4tc4tfkgze35cc23yprtpzfrzygsptkzn".to_string());
+    let item = Item::try_from(item).unwrap();
+
+    let address = rpc.get_secp_address_by_item(item).unwrap();
+    println!("{:?}", address.to_string());
+    assert_eq!("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq06y24q4tc4tfkgze35cc23yprtpzfrzygljdjh9".to_string(), address.to_string())
+}
+
+#[test]
+async fn test_get_secp_address_by_item_pw_lock_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    let item = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
+    let item = Item::try_from(item).unwrap();
+
+    let address = rpc.get_secp_address_by_item(item).unwrap();
+    println!("{:?}", address.to_string());
+    assert_eq!("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqtvuu3ysunhkq9qs54fgwarl40wq0xv5ps0swu7s".to_string(), address.to_string())
+}
 
 #[test]
 async fn test_get_live_cells_by_identity() {
@@ -569,9 +631,6 @@ async fn test_get_live_cells_by_identity() {
 // }
 
 // #[test]
-// async fn test_get_transactions_by_item() {}
-
-// #[test]
 // async fn test_get_secp_lock_hash_by_item() {}
 
 // #[test]
@@ -592,6 +651,22 @@ async fn test_get_balance_by_address() {
         tip_block_number: None,
     };
     let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_pw_lock_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    println!("{:?}", balances);
     print_balances(balances.unwrap().balances);
 }
 
