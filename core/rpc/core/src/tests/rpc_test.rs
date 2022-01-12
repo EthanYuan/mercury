@@ -46,12 +46,22 @@ async fn new_rpc(network: NetworkType) -> MercuryRpcImpl<CkbRpcClient> {
     engine.rpc(network)
 }
 
-fn new_identity(address: &str) -> Identity {
+fn new_identity_from_secp_address(address: &str) -> Identity {
     let address = Address::from_str(address).unwrap();
+    assert!(address.is_secp256k1());
     let script = address_to_script(address.payload());
     let pub_key_hash = H160::from_slice(&script.args().as_slice()[4..24]).unwrap();
     println!("pubkey {:?}", pub_key_hash.to_string());
     Identity::new(IdentityFlag::Ckb, pub_key_hash)
+}
+
+fn new_identity_from_pw_lock_address(address: &str) -> Identity {
+    let address = Address::from_str(address).unwrap();
+    assert!(address.is_pw_lock());
+    let script = address_to_script(address.payload());
+    let pub_key_hash = H160::from_slice(&script.args().as_slice()[4..24]).unwrap();
+    println!("pubkey {:?}", pub_key_hash.to_string());
+    Identity::new(IdentityFlag::Ethereum, pub_key_hash)
 }
 
 fn new_outpoint(tx_id: &str, index: u32) -> OutPoint {
@@ -126,6 +136,7 @@ fn print_scripts(rpc: &MercuryRpcImpl<CkbRpcClient>, scripts: Vec<Script>) {
 }
 
 fn print_cells(rpc: &MercuryRpcImpl<CkbRpcClient>, cells: Vec<DetailedCell>) {
+    println!("cells: {:?}", cells.len());
     for cell in cells {
         println!("*****************");
         println!("tx_hash: {}", cell.out_point.tx_hash().to_string());
@@ -409,7 +420,7 @@ async fn test_get_transactions_by_lock_hash() {
 #[test]
 async fn test_get_scripts_by_identity() {
     let rpc = new_rpc(NetworkType::Testnet).await;
-    let identity = new_identity("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq06y24q4tc4tfkgze35cc23yprtpzfrzygljdjh9");
+    let identity = new_identity_from_secp_address("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq06y24q4tc4tfkgze35cc23yprtpzfrzygljdjh9");
     println!("{:?}", identity);
     let scripts = rpc
         .get_scripts_by_identity(Context::new(), identity, None)
@@ -478,19 +489,27 @@ async fn test_get_secp_address_by_item_acp_address() {
 #[test]
 async fn test_get_secp_address_by_item_pw_lock_address() {
     let rpc = new_rpc(NetworkType::Testnet).await;
+
+    // 1
     let item = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
     let item = Item::try_from(item).unwrap();
 
-    let address = rpc.get_secp_address_by_item(item).unwrap();
-    println!("{:?}", address.to_string());
-    assert_eq!("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqtvuu3ysunhkq9qs54fgwarl40wq0xv5ps0swu7s".to_string(), address.to_string())
+    let address = rpc.get_secp_address_by_item(item);
+    assert!(address.is_err());
+
+    // 2
+    let item = JsonItem::Address("ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdmda0qd9hukl5r92ujp0nzu6cr4azmudgxac2dp".to_string());
+    let item = Item::try_from(item).unwrap();
+
+    let address = rpc.get_secp_address_by_item(item);
+    assert!(address.is_err());
 }
 
 #[test]
-async fn test_get_live_cells_by_identity() {
+async fn test_get_live_cells_by_item_identity() {
     let rpc = new_rpc(NetworkType::Testnet).await;
 
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
 
     // 3
     let mut page = PaginationRequest::default();
@@ -564,23 +583,58 @@ async fn test_get_live_cells_by_identity() {
     assert_eq!(cells, cells_1)
 }
 
-// #[test]
-// async fn test_get_live_cells_by_address() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     let cells = rpc
-//         .get_live_cells_by_item(
-//             Item::Address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr".to_string()),
-//             HashSet::new(),
-//             None,
-//             None,
-//             None,
-//             None,
-//             false,
-//         )
-//         .await
-//         .unwrap();
-//     print_cells(&rpc, cells);
-// }
+#[test]
+async fn test_get_live_cells_by_item_identity_2() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let mut page = PaginationRequest::default();
+    page.set_limit(Some(1000));
+
+    let identity = new_identity_from_secp_address("ckt1qyq27z6pccncqlaamnh8ttapwn260egnt67ss2cwvz");
+    println!("{:?}", identity);
+
+    let cells = rpc
+        .get_live_cells_by_item(
+            Context::new(),
+            Item::Identity(identity.clone()),
+            HashSet::new(),
+            None,
+            None,
+            None,
+            None,
+            false,
+            &mut page,
+        )
+        .await
+        .unwrap();
+    print_cells(&rpc, cells);
+}
+
+#[test]
+async fn test_get_live_cells_by_item_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let mut page = PaginationRequest::default();
+    page.set_limit(Some(100));
+
+    let cells = rpc
+        .get_live_cells_by_item(
+            Context::new(),
+            Item::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string()),
+            HashSet::new(),
+            None,
+            None,
+            Some((**PW_LOCK_CODE_HASH.load()).clone()),
+            None,
+            false,
+            &mut page,
+        )
+        .await
+        .unwrap();
+    print_cells(&rpc, cells);
+}
 
 // #[test]
 // async fn test_get_live_cells_by_record_id() {
@@ -655,6 +709,53 @@ async fn test_get_balance_by_address() {
 }
 
 #[test]
+async fn test_get_balance_by_address_2() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_address_3() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1qyq05g42p2h32knvs9nrf3s4zgzxkzyjxygsmfsj8m".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    println!("{:?}", balances);
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_address_4() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+    let item = JsonItem::Address("ckt1qyq27z6pccncqlaamnh8ttapwn260egnt67ss2cwvz".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    println!("{:?}", balances);
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
 async fn test_get_balance_by_pw_lock_address() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
@@ -671,10 +772,45 @@ async fn test_get_balance_by_pw_lock_address() {
 }
 
 #[test]
-async fn test_get_balance_by_address_2() {
+async fn test_get_balance_by_identity_for_pw_lock() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
-    let item = JsonItem::Address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr".to_string());
+
+    let identity = new_identity_from_pw_lock_address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+// async fn test_get_balance_by_record_for_pw_lock() {
+//     let rpc = new_rpc(NetworkType::Testnet).await;
+//     init_tip(&rpc, None).await;
+
+//     let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+//     let item = JsonItem::Identity(hex::encode(identity.0));
+//     let asset_infos = HashSet::new();
+//     let payload = GetBalancePayload {
+//         item,
+//         asset_infos,
+//         tip_block_number: None,
+//     };
+//     let balances = rpc.inner_get_balance(Context::new(), payload).await;
+//     print_balances(balances.unwrap().balances);
+// }
+
+#[test]
+async fn test_get_balance_by_identity() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let identity = new_identity_from_secp_address("ckt1qyq27z6pccncqlaamnh8ttapwn260egnt67ss2cwvz");
+    let item = JsonItem::Identity(hex::encode(identity.0));
     let asset_infos = HashSet::new();
     let payload = GetBalancePayload {
         item,
@@ -686,17 +822,108 @@ async fn test_get_balance_by_address_2() {
 }
 
 #[test]
-async fn test_get_balance_by_identity() {
+async fn test_get_balance_by_identity_2() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
 
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq05g42p2h32knvs9nrf3s4zgzxkzyjxygsmfsj8m");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let asset_infos = HashSet::new();
     let payload = GetBalancePayload {
         item,
         asset_infos,
         tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_identity_3() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let identity = new_identity_from_secp_address("ckt1qyq27z6pccncqlaamnh8ttapwn260egnt67ss2cwvz"); // secp + acp + cheque
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    println!("{:?}", balances);
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_record_id() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let item = JsonItem::Record("0xfc43d8bdfff3051f3c908cd137e0766eecba4e88ae5786760c3e0e0f1d76c0040000000200636b74317179716738386363716d35396b7378703835373838706e716734726b656a646763673271786375327166".to_string());
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_record_id_2() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let item = JsonItem::Record("0xecfea4bdf6bf8290d8f8186ed9f4da9b0f8fbba217600b47632f5a72ff677d4d000000000135326365613162373862303234306632316331633934616638346365373334323063326539363332".to_string());
+    let mut asset_infos = HashSet::new();
+    let assert_info = AssetInfo {
+        asset_type: AssetType::UDT,
+        udt_hash: H256::from_str(
+            "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
+        )
+        .unwrap(),
+    };
+    asset_infos.insert(assert_info);
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
+
+#[test]
+async fn test_get_balance_by_record_id_address() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
+
+    let record_id = new_record_id(
+        "0a7df580b534769fc9933e904300da6aadfa61cebb95805d07ae5bcebefe9c56",
+        1,
+        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqf3dm7hhmpwrze2semwa5fv2zusw94e9vs4vxmyz",
+    );
+    let record_id = hex::encode(record_id.to_vec());
+    println!("{:?}", record_id);
+    let item = JsonItem::Record(record_id);
+
+    let asset_infos = HashSet::new();
+    // let assert_info = AssetInfo {
+    //     asset_type: AssetType::UDT,
+    //     udt_hash: H256::from_str(
+    //         "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
+    //     )
+    //     .unwrap(),
+    // };
+    // asset_infos.insert(assert_info);
+
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: Some(3818475),
     };
     let balances = rpc.inner_get_balance(Context::new(), payload).await;
     print_balances(balances.unwrap().balances);
@@ -834,7 +1061,7 @@ async fn test_get_balance_by_identity() {
 // }
 
 #[test]
-async fn test_get_block_info_of_block_number() {
+async fn test_get_block_info_for_pw_lock() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
 
@@ -905,7 +1132,7 @@ async fn test_get_block_info_of_block_number() {
 // }
 
 #[test]
-async fn test_get_transaction_info() {
+async fn test_get_transaction_info_for_pw_lock() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
 
@@ -919,7 +1146,7 @@ async fn test_get_transaction_info() {
 }
 
 #[test]
-async fn test_get_spent_transaction_with_double_entry() {
+async fn test_get_spent_transaction_with_double_entry_for_pw_lock() {
     let rpc = new_rpc(NetworkType::Testnet).await;
     init_tip(&rpc, None).await;
 
@@ -1319,7 +1546,7 @@ async fn test_build_transfer_with_udt_and_hold_by_to() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -1350,7 +1577,7 @@ async fn test_build_transfer_with_udt_and_hold_by_to() {
 }
 
 #[test]
-async fn test_query_transactions() {
+async fn test_query_transactions_for_miner_address() {
     let net_ty = NetworkType::Testnet;
     let rpc = new_rpc(net_ty).await;
     init_tip(&rpc, None).await;
@@ -1398,6 +1625,69 @@ async fn test_query_transactions_by_identity() {
             )),
             order: Order::Desc,
             limit: Some(50),
+            skip: None,
+            return_count: true,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc
+        .inner_query_transactions(Context::new(), payload)
+        .await
+        .unwrap();
+    println!("transactions: {:?}", transactions);
+    let _json_string = serde_json::to_string_pretty(&transactions).unwrap();
+}
+
+#[test]
+async fn test_query_transactions_by_address_with_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let mut asset_infos = HashSet::new();
+    asset_infos.insert(AssetInfo::new_ckb());
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string()),
+        asset_infos,
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(1),
+            skip: None,
+            return_count: false,
+        },
+        structure_type: StructureType::DoubleEntry,
+    };
+
+    let transactions = rpc.inner_query_transactions(Context::new(), payload).await;
+    println!("{:?}", transactions);
+}
+
+#[test]
+async fn test_query_transactions_by_identity_with_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_infos = HashSet::new();
+
+    let payload = QueryTransactionsPayload {
+        item: JsonItem::Identity("0x016ce722487277b00a0852a943ba3fd5ee03ccca06".to_string()),
+        asset_infos,
+        extra: None,
+        block_range: None,
+        pagination: PaginationRequest {
+            cursor: Some(ckb_types::bytes::Bytes::from(
+                [127, 255, 255, 255, 255, 255, 255, 254].to_vec(),
+            )),
+            order: Order::Desc,
+            limit: Some(1),
             skip: None,
             return_count: true,
         },
@@ -1670,8 +1960,57 @@ async fn test_adjust_account() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
+    let payload = AdjustAccountPayload {
+        item,
+        from: HashSet::new(),
+        asset_info,
+        account_number: None,
+        extra_ckb: None,
+        fee_rate: None,
+    };
+    pretty_print(&payload);
+    let tx = rpc
+        .inner_build_adjust_account_transaction(Context::new(), payload)
+        .await
+        .unwrap()
+        .unwrap();
+    pretty_print(&tx);
+    pretty_print_raw_tx(net_ty, &rpc, tx).await;
+}
+
+#[test]
+async fn test_adjust_account_with_pw_lock_address() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    // udt
+    let code_hash =
+        H256::from_str("c5e5dcf215925f7ef4dfaf5f4b4f105bc321c02776d6e7d52a1db3fcd9d011a4").unwrap();
+    let args =
+        hex::decode("c43009f083e70ae3fee342d59b8df9eec24d669c1c3a3151706d305f5362c37e").unwrap();
+    let script = packed::ScriptBuilder::default()
+        .hash_type(ckb_types::core::ScriptHashType::Type.into())
+        .code_hash(code_hash.pack())
+        .args(ckb_types::bytes::Bytes::from(args).pack())
+        .build();
+    let udt_script_hash = script.calc_script_hash();
+    let udt_script_hash = hex::encode(udt_script_hash.raw_data());
+    assert_eq!(
+        "526bf9af46da513e9b7021e306790f7f03ae320801f3dc0750b2156fcd3d656c".to_string(),
+        udt_script_hash
+    );
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("526bf9af46da513e9b7021e306790f7f03ae320801f3dc0750b2156fcd3d656c").unwrap(),
+    );
+
+    // let identity = new_identity("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz");
+    // let item = JsonItem::Identity(hex::encode(identity.0));
+
+    let item  = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
     let payload = AdjustAccountPayload {
         item,
         from: HashSet::new(),
@@ -1696,7 +2035,7 @@ async fn test_build_dao_claim_transaction() {
     let rpc = new_rpc(net_ty).await;
     init_tip(&rpc, None).await;
 
-    let identity = new_identity("ckt1qyqzqfj8lmx9h8vvhk62uut8us844v0yh2hsnqvvgc");
+    let identity = new_identity_from_secp_address("ckt1qyqzqfj8lmx9h8vvhk62uut8us844v0yh2hsnqvvgc");
     let item = JsonItem::Identity(hex::encode(identity.0));
 
     let payload = DaoClaimPayload {
@@ -1770,79 +2109,6 @@ async fn test_build_ckb_secp_transfer_transaction_with_claim_dao_cell() {
         .await
         .unwrap();
     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
-}
-
-#[test]
-async fn test_get_balance_by_record_id() {
-    let rpc = new_rpc(NetworkType::Testnet).await;
-    init_tip(&rpc, None).await;
-
-    let item = JsonItem::Record("0xfc43d8bdfff3051f3c908cd137e0766eecba4e88ae5786760c3e0e0f1d76c0040000000200636b74317179716738386363716d35396b7378703835373838706e716734726b656a646763673271786375327166".to_string());
-    let asset_infos = HashSet::new();
-    let payload = GetBalancePayload {
-        item,
-        asset_infos,
-        tip_block_number: None,
-    };
-    let balances = rpc.inner_get_balance(Context::new(), payload).await;
-    print_balances(balances.unwrap().balances);
-}
-
-#[test]
-async fn test_get_balance_by_record_id_2() {
-    let rpc = new_rpc(NetworkType::Testnet).await;
-    init_tip(&rpc, None).await;
-
-    let item = JsonItem::Record("0xecfea4bdf6bf8290d8f8186ed9f4da9b0f8fbba217600b47632f5a72ff677d4d000000000135326365613162373862303234306632316331633934616638346365373334323063326539363332".to_string());
-    let mut asset_infos = HashSet::new();
-    let assert_info = AssetInfo {
-        asset_type: AssetType::UDT,
-        udt_hash: H256::from_str(
-            "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
-        )
-        .unwrap(),
-    };
-    asset_infos.insert(assert_info);
-    let payload = GetBalancePayload {
-        item,
-        asset_infos,
-        tip_block_number: None,
-    };
-    let balances = rpc.inner_get_balance(Context::new(), payload).await;
-    print_balances(balances.unwrap().balances);
-}
-
-#[test]
-async fn test_get_balance_by_record_id_address() {
-    let rpc = new_rpc(NetworkType::Testnet).await;
-    init_tip(&rpc, None).await;
-
-    let record_id = new_record_id(
-        "0a7df580b534769fc9933e904300da6aadfa61cebb95805d07ae5bcebefe9c56",
-        1,
-        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqf3dm7hhmpwrze2semwa5fv2zusw94e9vs4vxmyz",
-    );
-    let record_id = hex::encode(record_id.to_vec());
-    println!("{:?}", record_id);
-    let item = JsonItem::Record(record_id);
-
-    let asset_infos = HashSet::new();
-    // let assert_info = AssetInfo {
-    //     asset_type: AssetType::UDT,
-    //     udt_hash: H256::from_str(
-    //         "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
-    //     )
-    //     .unwrap(),
-    // };
-    // asset_infos.insert(assert_info);
-
-    let payload = GetBalancePayload {
-        item,
-        asset_infos,
-        tip_block_number: Some(3818475),
-    };
-    let balances = rpc.inner_get_balance(Context::new(), payload).await;
-    print_balances(balances.unwrap().balances);
 }
 
 #[test]
@@ -2018,7 +2284,7 @@ async fn test_build_ckb_secp_transfer_transaction_with_sudt_cell() {
 
     let asset_info = AssetInfo::new_ckb();
 
-    let identity = new_identity("ckt1qyq28wze3cw48ek9az0g4jmtfs6d8td38u4s6hp2s0");
+    let identity = new_identity_from_secp_address("ckt1qyq28wze3cw48ek9az0g4jmtfs6d8td38u4s6hp2s0");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2093,7 +2359,7 @@ async fn test_build_ckb_acp_transfer_transaction_with_pay_fee_with_change() {
     init_tip(&rpc, None).await;
 
     let asset_info = AssetInfo::new_ckb();
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2134,7 +2400,7 @@ async fn test_build_udt_cheque_transfer_transaction() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2173,7 +2439,7 @@ async fn test_build_udt_cheque_transfer_transaction_from_contain_to() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2250,7 +2516,7 @@ async fn test_build_udt_acp_transfer_transaction_with_change() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2290,7 +2556,7 @@ async fn test_build_udt_acp_transfer_transaction_with_pay_fee_with_change() {
     let asset_info = AssetInfo::new_udt(
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
-    let identity = new_identity("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
