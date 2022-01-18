@@ -25,8 +25,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 const MAINNET_PG_HOST: &str = "8.210.250.164";
-const TESTNET_PG_HOST: &str = "8.210.169.63";
-// const TESTNET_PG_HOST: &str = "47.243.115.142";
+// const TESTNET_PG_HOST: &str = "8.210.169.63";
+const TESTNET_PG_HOST: &str = "47.243.115.142";
 // const TESTNET_PG_HOST: &str = "47.242.31.83";
 
 #[ignore]
@@ -236,7 +236,7 @@ fn print_cell_output(net_ty: NetworkType, output_cell: CellOutput, data: Bytes) 
     let payload = AddressPayload::from_script(&output_cell.lock.into());
     let address = Address::new(net_ty, payload, true);
     let ckb_amount = output_cell.capacity.value();
-    let udt_amount = decode_udt_amount(&data.as_slice()[4..]);
+    let udt_amount = decode_udt_amount(&data.as_slice()[4..]).unwrap_or(0);
     println!(
         "address: {:?}, ckb_amount: {}, udt_amount: {}",
         address.to_string(),
@@ -633,6 +633,17 @@ async fn test_get_live_cells_by_item_address() {
         )
         .await
         .unwrap();
+    let cells = cells
+        .into_iter()
+        .filter(|cell| {
+            if let Some(type_script) = cell.cell_output.type_().to_opt() {
+                let type_code_hash: H256 = type_script.code_hash().unpack();
+                type_code_hash != **DAO_CODE_HASH.load()
+            } else {
+                true
+            }
+        })
+        .collect();
     print_cells(&rpc, cells);
 }
 
@@ -788,21 +799,28 @@ async fn test_get_balance_by_identity_for_pw_lock() {
     print_balances(balances.unwrap().balances);
 }
 
-// async fn test_get_balance_by_record_for_pw_lock() {
-//     let rpc = new_rpc(NetworkType::Testnet).await;
-//     init_tip(&rpc, None).await;
+#[test]
+async fn test_get_balance_by_record_for_pw_lock() {
+    let rpc = new_rpc(NetworkType::Testnet).await;
+    init_tip(&rpc, None).await;
 
-//     let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
-//     let item = JsonItem::Identity(hex::encode(identity.0));
-//     let asset_infos = HashSet::new();
-//     let payload = GetBalancePayload {
-//         item,
-//         asset_infos,
-//         tip_block_number: None,
-//     };
-//     let balances = rpc.inner_get_balance(Context::new(), payload).await;
-//     print_balances(balances.unwrap().balances);
-// }
+    let record_id = new_record_id(
+        "f1fc108ed3449aa4dbfbf80da707e6515af317ad2edda29243a605c27d70c3c6",
+        2,
+        "ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz",
+    );
+    let record_id = hex::encode(record_id.to_vec());
+    println!("{:?}", record_id);
+    let item = JsonItem::Record(record_id);
+    let asset_infos = HashSet::new();
+    let payload = GetBalancePayload {
+        item,
+        asset_infos,
+        tip_block_number: None,
+    };
+    let balances = rpc.inner_get_balance(Context::new(), payload).await;
+    print_balances(balances.unwrap().balances);
+}
 
 #[test]
 async fn test_get_balance_by_identity() {
@@ -863,30 +881,6 @@ async fn test_get_balance_by_record_id() {
 
     let item = JsonItem::Record("0xfc43d8bdfff3051f3c908cd137e0766eecba4e88ae5786760c3e0e0f1d76c0040000000200636b74317179716738386363716d35396b7378703835373838706e716734726b656a646763673271786375327166".to_string());
     let asset_infos = HashSet::new();
-    let payload = GetBalancePayload {
-        item,
-        asset_infos,
-        tip_block_number: None,
-    };
-    let balances = rpc.inner_get_balance(Context::new(), payload).await;
-    print_balances(balances.unwrap().balances);
-}
-
-#[test]
-async fn test_get_balance_by_record_id_2() {
-    let rpc = new_rpc(NetworkType::Testnet).await;
-    init_tip(&rpc, None).await;
-
-    let item = JsonItem::Record("0xecfea4bdf6bf8290d8f8186ed9f4da9b0f8fbba217600b47632f5a72ff677d4d000000000135326365613162373862303234306632316331633934616638346365373334323063326539363332".to_string());
-    let mut asset_infos = HashSet::new();
-    let assert_info = AssetInfo {
-        asset_type: AssetType::UDT,
-        udt_hash: H256::from_str(
-            "f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd",
-        )
-        .unwrap(),
-    };
-    asset_infos.insert(assert_info);
     let payload = GetBalancePayload {
         item,
         asset_infos,
@@ -1233,6 +1227,31 @@ async fn test_build_dao_deposit() {
     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 }
 
+#[test]
+async fn test_build_dao_deposit_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+
+    let items = vec![JsonItem::Address(
+        "ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string(),
+    )];
+    let payload = DaoDepositPayload {
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: None,
+        amount: 200_00000000,
+        fee_rate: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_dao_deposit_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
 // // select encode(tx_hash, 'hex') from mercury_live_cell where type_code_hash = decode('82d76d1b75fe2fd9a27dfbaa65a039221a380d76c926f378d3f81cf3e7e13f2e', 'hex') and data != decode('0000000000000000', 'hex') limit 10;
 // #[test]
 // async fn test_build_withdraw() {
@@ -1259,6 +1278,26 @@ async fn test_build_dao_withdraw() {
     init_tip(&rpc, None).await;
 
     let items = JsonItem::Address("ckt1qyqzqfj8lmx9h8vvhk62uut8us844v0yh2hsnqvvgc".to_string());
+    let payload = DaoWithdrawPayload {
+        from: items,
+        pay_fee: None,
+        fee_rate: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_dao_withdraw_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_dao_withdraw_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let items = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
     let payload = DaoWithdrawPayload {
         from: items,
         pay_fee: None,
@@ -2004,18 +2043,56 @@ async fn test_adjust_account_with_pw_lock_address() {
     );
 
     let asset_info = AssetInfo::new_udt(
-        H256::from_str("526bf9af46da513e9b7021e306790f7f03ae320801f3dc0750b2156fcd3d656c").unwrap(),
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
 
     // let identity = new_identity("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz");
     // let item = JsonItem::Identity(hex::encode(identity.0));
 
+    let from_identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl");
+    let from_item = JsonItem::Identity(hex::encode(from_identity.0));
+    let mut from = HashSet::new();
+    from.insert(from_item);
+
     let item  = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
     let payload = AdjustAccountPayload {
         item,
-        from: HashSet::new(),
+        from,
         asset_info,
-        account_number: None,
+        account_number: Some(2),
+        extra_ckb: None,
+        fee_rate: None,
+    };
+    pretty_print(&payload);
+    let tx = rpc
+        .inner_build_adjust_account_transaction(Context::new(), payload)
+        .await
+        .unwrap()
+        .unwrap();
+    pretty_print(&tx);
+    pretty_print_raw_tx(net_ty, &rpc, tx).await;
+}
+
+#[test]
+async fn test_adjust_account_with_pw_lock_address_with_privkey() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+
+    let from = HashSet::new();
+    // let from_item = JsonItem::Address("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqthh5pum5pzqpssk47zk67hnd6lm28rnqs4cnj0w".to_string());
+    // from.insert(from_item);
+
+    let item  = JsonItem::Address("ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string());
+    let payload = AdjustAccountPayload {
+        item,
+        from,
+        asset_info,
+        account_number: Some(9),
         extra_ckb: None,
         fee_rate: None,
     };
@@ -2059,6 +2136,28 @@ async fn test_build_dao_claim_transaction_with_address() {
     init_tip(&rpc, None).await;
 
     let item = JsonItem::Address("ckt1qyqq4x8yqvfggzazwn49t8h2mv4y8py5ppxs04kctp".to_string());
+
+    let payload = DaoClaimPayload {
+        from: item,
+        to: None,
+        fee_rate: Some(1000),
+    };
+    pretty_print(&payload);
+    let tx = rpc
+        .inner_build_dao_claim_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print(&tx);
+    pretty_print_raw_tx(net_ty, &rpc, tx).await;
+}
+
+#[test]
+async fn test_build_dao_claim_transaction_with_pw_lock_address() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let item = JsonItem::Address("ckt1q3vvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxm88yfy8yaaspgy9922rhglatmsren9qvuknrnz".to_string());
 
     let payload = DaoClaimPayload {
         from: item,
@@ -2190,6 +2289,43 @@ async fn test_build_ckb_secp_transfer_transaction_with_fee_rate() {
         pay_fee: Some("ckt1qyqqtg06h75ymw098r3w0l3u4xklsj04tnsqctqrmc".to_string()),
         change: None,
         fee_rate: Some(1000000),
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_ckb_secp_transfer_transaction_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+    let items = vec![JsonItem::Address(
+        "ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string(),
+    )];
+    let to_info = ToInfo {
+        address: "ckt1qyqg88ccqm59ksxp85788pnqg4rkejdgcg2qxcu2qf".to_string(),
+        amount: "10000000000".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
         since: None,
     };
 
@@ -2392,6 +2528,79 @@ async fn test_build_ckb_acp_transfer_transaction_with_pay_fee_with_change() {
 }
 
 #[test]
+async fn test_build_ckb_acp_transfer_transaction_to_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+    // let identity = new_identity_from_secp_address("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsq0jk8hhyea6hnzmtgkct79y0gfpa8lwueqrn57ur");
+    let item = JsonItem::Address("ckt1qyqdfwf8fa206yk5lsaazn3w3jfjfuhqhe8qytqyms".to_string());
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string(),
+        amount: "100000000".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByTo,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_ckb_secp_transfer_transaction_from_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_ckb();
+    let item = JsonItem::Address("ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string());
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqthh5pum5pzqpssk47zk67hnd6lm28rnqs4cnj0w".to_string(),
+        amount: "6100000000".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
 async fn test_build_udt_cheque_transfer_transaction() {
     let net_ty = NetworkType::Testnet;
     let rpc = new_rpc(net_ty).await;
@@ -2401,6 +2610,45 @@ async fn test_build_udt_cheque_transfer_transaction() {
         H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
     );
     let identity = new_identity_from_secp_address("ckt1qyq8jy6e6hu89lzwwgv9qdx6p0kttl4uax9s79m0mr");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qyqv2w7f5kuctnt03kk9l09gwuuy6wpys64s4f8vve".to_string(),
+        amount: "1111".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByFrom,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_udt_cheque_transfer_transaction_from_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+    let identity = new_identity_from_pw_lock_address("ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv");
     let item = JsonItem::Identity(hex::encode(identity.0));
     let items = vec![item];
     let to_info = ToInfo {
@@ -2536,6 +2784,84 @@ async fn test_build_udt_acp_transfer_transaction_with_change() {
         },
         pay_fee: None,
         change: Some(change),
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_udt_acp_transfer_transaction_from_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+    let identity = new_identity_from_pw_lock_address("ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qypv2w7f5kuctnt03kk9l09gwuuy6wpys64smeamhm".to_string(),
+        amount: "100".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByTo,
+        },
+        pay_fee: None,
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[test]
+async fn test_build_udt_acp_transfer_transaction_to_pw_lock() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+    let identity = new_identity_from_secp_address("ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqwy7nwzv795wx5qc22rn9f9q58puwcrq3gxjcprk");
+    let item = JsonItem::Identity(hex::encode(identity.0));
+    let items = vec![item];
+    let to_info = ToInfo {
+        address: "ckt1qpvvtay34wndv9nckl8hah6fzzcltcqwcrx79apwp2a5lkd07fdxxqdd40lmnsnukjh3qr88hjnfqvc4yg8g0gskp8ffv".to_string(),
+        amount: "100".to_string(),
+    };
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByTo,
+        },
+        pay_fee: None,
+        change: None,
         fee_rate: None,
         since: None,
     };
