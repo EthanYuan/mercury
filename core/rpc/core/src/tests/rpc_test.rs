@@ -2918,6 +2918,97 @@ async fn test_build_udt_acp_transfer_transaction_with_change() {
     pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
 }
 
+#[ignore]
+#[test]
+async fn test_build_udt_acp_transfer_transaction_with_cheque_address() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+
+    let item_cheque_address = JsonItem::Address("ckt1q3sdtuu7lnjqn3v8ew02xkwwlh4dv5x2z28shkwt8p2nfruccux4kaedejfkzfry4ccapp22qgsfr6schlz7aj5lc09uvu8xw3g7jg8x747xgl6jnet87rser4k".to_string());
+    let items = vec![item_cheque_address];
+
+    let to_info = ToInfo {
+        address: "ckt1qypv2w7f5kuctnt03kk9l09gwuuy6wpys64smeamhm".to_string(),
+        amount: "100".to_string(),
+    };
+    let pay_fee = "ckt1qyqv2w7f5kuctnt03kk9l09gwuuy6wpys64s4f8vve".to_string();
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByTo,
+        },
+        pay_fee: Some(pay_fee),
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
+#[ignore]
+#[test]
+async fn test_build_udt_acp_transfer_transaction_with_cheque_record_id() {
+    let net_ty = NetworkType::Testnet;
+    let rpc = new_rpc(net_ty).await;
+    init_tip(&rpc, None).await;
+
+    let asset_info = AssetInfo::new_udt(
+        H256::from_str("f21e7350fa9518ed3cbb008e0e8c941d7e01a12181931d5608aa366ee22228bd").unwrap(),
+    );
+
+    // decode record_id
+    let record_id_bytes = new_record_id(
+        "52b1cf0ad857d53e1a3552944c1acf268f6a6aea8e8fc85fe8febcb8127d56f0",
+        0,
+        "ckt1qzda0cr08m85hc8jlnfp3zer7xulejywt49kt2rr0vthywaa50xwsqtezdvat7rjl388yxzsxndqhm94l67wnzcfv52fg",
+    );
+    let record_id = hex::encode(record_id_bytes.to_vec());
+    let item = JsonItem::Record(record_id);
+    let items = vec![item];
+
+    let to_info = ToInfo {
+        address: "ckt1qypv2w7f5kuctnt03kk9l09gwuuy6wpys64smeamhm".to_string(),
+        amount: "100".to_string(),
+    };
+    let pay_fee = "ckt1qyqv2w7f5kuctnt03kk9l09gwuuy6wpys64s4f8vve".to_string();
+    let payload = TransferPayload {
+        asset_info,
+        from: From2 {
+            items,
+            source: Source::Free,
+        },
+        to: To {
+            to_infos: vec![to_info],
+            mode: Mode::HoldByTo,
+        },
+        pay_fee: Some(pay_fee),
+        change: None,
+        fee_rate: None,
+        since: None,
+    };
+
+    let raw_transaction = rpc
+        .inner_build_transfer_transaction(Context::new(), payload)
+        .await
+        .unwrap();
+    pretty_print_raw_tx(net_ty, &rpc, raw_transaction).await;
+}
+
 #[test]
 async fn test_build_udt_acp_transfer_transaction() {
     let net_ty = NetworkType::Testnet;
