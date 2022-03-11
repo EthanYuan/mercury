@@ -1,5 +1,7 @@
+use ckb_types::H256;
 use core::panic;
 use serde_json::Value;
+
 use std::env;
 use std::{i64, slice::Iter};
 
@@ -39,4 +41,18 @@ pub fn check_amount(outputs: Iter<Value>, input_total: i64, fee: Option<i64>) {
         assert!(output_total + 100000 > input_total);
         assert!(output_total < input_total);
     }
+}
+
+pub fn get_out_point(record_id: &str) -> (H256, u32) {
+    let record_id = hex::decode(record_id).unwrap();
+    let tx_hash = H256::from_slice(&record_id[0..32]).unwrap();
+    let index = u32::from_be_bytes(to_fixed_array::<4>(&record_id[32..36]));
+    return (tx_hash, index);
+}
+
+pub fn to_fixed_array<const LEN: usize>(input: &[u8]) -> [u8; LEN] {
+    assert_eq!(input.len(), LEN);
+    let mut list = [0; LEN];
+    list.copy_from_slice(input);
+    list
 }

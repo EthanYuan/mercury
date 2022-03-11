@@ -1,6 +1,7 @@
-use serde_json::Value;
+use super::common::{get_out_point, post_http_request};
 
-use super::common::post_http_request;
+use serde_json::Value;
+use std::collections::HashSet;
 
 #[test]
 fn test_query_by_address() {
@@ -712,4 +713,213 @@ fn test_query_by_address_with_block_range() {
     for i in 1..4 {
         assert_eq!(records[i]["block_number"], 3768113);
     }
+}
+
+#[test]
+fn test_query_tx_deposit_with_get_spent_tx() {
+    let resp = post_http_request(
+        r#"{
+        "id": 42,
+        "jsonrpc": "2.0",
+        "method": "query_transactions",
+        "params": [
+            {
+                "item": {
+                    "type": "Address",
+                    "value": "ckt1qyq8dwp0v3apy0cf64qry64mcqgtqjvj4wgsyzxsh2"
+                },
+                "asset_infos": [],
+                "extra": "Dao",
+                "block_range": [0, 4592529],
+                "pagination": {
+                    "order": "desc",
+                    "limit": 50,
+                    "skip": null,
+                    "return_count": true
+                },
+                "structure_type": "DoubleEntry"
+            }
+        ]
+    }"#,
+    );
+    let r = &resp["result"];
+    let txs = &r["response"].as_array().unwrap();
+
+    assert_eq!(r["count"], 2);
+    assert_eq!(txs.len(), 2);
+
+    let tx_0 = &r["response"][0]["value"];
+    let records = &tx_0["records"].as_array().unwrap();
+
+    assert_eq!(
+        tx_0["tx_hash"],
+        "0x676166e343a7c0d7c1de72d83e596a284f7a27e09e6ab363f1f18e648e95443b"
+    );
+    assert_eq!(records.len(), 4);
+
+    let records_deposit: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() > 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Deposit"
+        })
+        .collect();
+    let records_withdraw_p1: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() > 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Withdraw"
+        })
+        .collect();
+    let records_withdraw_p2: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() < 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Withdraw"
+        })
+        .collect();
+
+    assert_eq!(records_deposit.len(), 0); // This means that the deposit outpoint does not exist in the transaction. If it exists, it needs to be further confirmed that it has not been spent.
+    assert_eq!(records_withdraw_p1.len(), 1); // This means that this record of the transaction is a withdrawing p1 outpoint, but to further confirm that it has not been spent.
+    assert_eq!(records_withdraw_p2.len(), 0); // This means that the withdrawing p2 outpoint does not exist in the transaction. If it exists, it means it has been spent.
+
+    let (tx_hash, index) = get_out_point(&records_withdraw_p1[0]["id"].as_str().unwrap());
+
+    assert_eq!(
+        tx_hash.to_string(),
+        "676166e343a7c0d7c1de72d83e596a284f7a27e09e6ab363f1f18e648e95443b".to_string()
+    );
+    assert_eq!(0, index);
+
+    let resp = post_http_request(
+        r#"{
+        "id": 42,
+        "jsonrpc": "2.0",
+        "method": "get_spent_transaction",
+        "params": [{
+            "outpoint": {
+                "tx_hash": "0x676166e343a7c0d7c1de72d83e596a284f7a27e09e6ab363f1f18e648e95443b",
+                "index": "0x0"
+            },
+            "structure_type": "Native"
+        }]
+    }"#,
+    );
+    assert_ne!(resp["error"], Value::Null); // If the spent transaction is not found, it means that it has not performed the withdraw p2 operation.
+}
+
+#[test]
+fn test_query_tx_dao() {
+    let resp = post_http_request(
+        r#"{
+        "id": 42,
+        "jsonrpc": "2.0",
+        "method": "query_transactions",
+        "params": [
+            {
+                "item": {
+                    "type": "Address",
+                    "value": "ckt1qyq8dwp0v3apy0cf64qry64mcqgtqjvj4wgsyzxsh2"
+                },
+                "asset_infos": [],
+                "extra": "Dao",
+                "block_range": [0, 4592529],
+                "pagination": {
+                    "order": "desc",
+                    "limit": 50,
+                    "skip": null,
+                    "return_count": true
+                },
+                "structure_type": "DoubleEntry"
+            }
+        ]
+    }"#,
+    );
+    let r = &resp["result"];
+    let txs = &r["response"].as_array().unwrap();
+
+    assert_eq!(r["count"], 2);
+    assert_eq!(txs.len(), 2);
+
+    let tx_0 = &r["response"][0]["value"];
+    let records_in_tx_0 = &tx_0["records"].as_array().unwrap();
+    let tx_1 = &r["response"][1]["value"];
+    let records_in_tx_1 = &tx_1["records"].as_array().unwrap();
+
+    assert_eq!(
+        tx_0["tx_hash"],
+        "0x676166e343a7c0d7c1de72d83e596a284f7a27e09e6ab363f1f18e648e95443b"
+    );
+    assert_eq!(records_in_tx_0.len(), 4);
+    assert_eq!(
+        tx_1["tx_hash"],
+        "0xf8f1c563b52472c1a5e802e50782afe92efb1fbabbb0448c545bcede65a858e2"
+    );
+    assert_eq!(records_in_tx_1.len(), 3);
+
+    // prepare data: get all records in all txs
+    let mut records = vec![];
+    for tx in txs.into_iter() {
+        let mut r: Vec<Value> = tx["value"]["records"].as_array().unwrap().to_vec();
+        records.append(&mut r);
+    }
+    assert_eq!(records.len(), 7);
+
+    // Goal 1: get p2 withdraw txs
+    let records_withdraw_p2: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() < 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Withdraw"
+        })
+        .collect();
+    let set_records_withdraw_p2: HashSet<_> = records_withdraw_p2
+        .iter()
+        .map(|r| get_out_point(&r["id"].as_str().unwrap()))
+        .collect();
+    assert_eq!(records_withdraw_p2.len(), 0);
+
+    // Goal 2: get p1 withdraw txs, which are not be p2 withdraw
+    let mut records_withdraw_p1: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() > 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Withdraw"
+        })
+        .collect();
+    records_withdraw_p1.retain(|r| {
+        let out_point = get_out_point(&r["id"].as_str().unwrap());
+        !set_records_withdraw_p2.contains(&out_point)
+    });
+    assert_eq!(records_withdraw_p1.len(), 1);
+
+    // Goal 3: get deposit txs, which are not be withdraw
+    let mut records_deposit: Vec<&Value> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() > 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Deposit"
+        })
+        .collect();
+    let set_records_deposit_spent: HashSet<_> = records
+        .iter()
+        .filter(|r| {
+            i64::from_str_radix(&r["amount"].as_str().unwrap(), 10).unwrap() < 0
+                && r["extra"]["type"] == "Dao"
+                && r["extra"]["value"]["state"]["type"] == "Deposit"
+        })
+        .map(|r| get_out_point(&r["id"].as_str().unwrap()))
+        .collect();
+    assert_eq!(1, records_deposit.len());
+    records_deposit.retain(|r| {
+        let out_point = get_out_point(&r["id"].as_str().unwrap());
+        !set_records_deposit_spent.contains(&out_point)
+    });
+    assert_eq!(0, records_deposit.len());
 }
