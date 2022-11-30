@@ -9,11 +9,11 @@ use core_rpc_types::{indexer::Transaction, IOType};
 use db_sqlx::{build_query_page_sql, SQLXPool};
 use protocol::db::{SimpleBlock, SimpleTransaction};
 
-use ckb_jsonrpc_types::{Script, TransactionWithStatus};
+use ckb_jsonrpc_types::Script;
 use ckb_types::bytes::Bytes;
 use ckb_types::core::{
-    BlockBuilder, BlockNumber, BlockView, EpochNumberWithFraction, HeaderBuilder, HeaderView,
-    TransactionBuilder, TransactionView, UncleBlockView,
+    tx_pool::TransactionWithStatus, BlockBuilder, BlockNumber, BlockView, EpochNumberWithFraction,
+    HeaderBuilder, HeaderView, TransactionBuilder, TransactionView, UncleBlockView,
 };
 use ckb_types::{packed, prelude::*, H160, H256};
 use num_bigint::BigUint;

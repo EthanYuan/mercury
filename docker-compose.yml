@@ -27,7 +27,7 @@ services:
     container_name: ckb-node
     user: root
     restart: always
-    image: nervos/perkins-tent:v0.104.0_0.4.1
+    image: nervos/perkins-tent:v0.105.1_0.4.2
     environment:
       CKB_NETWORK: mainnet
     ports:

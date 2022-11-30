@@ -5,11 +5,13 @@ pub mod relational;
 
 pub use relational::RelationalStorage;
 
-use ckb_jsonrpc_types::{Script, TransactionWithStatus};
-use ckb_types::core::{BlockNumber, BlockView, HeaderView, TransactionView};
+use ckb_jsonrpc_types::{Script, TxStatus};
+use ckb_types::core::{
+    tx_pool::TransactionWithStatus, BlockNumber, BlockView, HeaderView, TransactionView,
+};
 use ckb_types::{bytes::Bytes, packed, H160, H256};
 use common::{async_trait, DetailedCell, PaginationRequest, PaginationResponse, Range, Result};
-use core_rpc_types::indexer::Transaction;
+use core_rpc_types::indexer;
 use core_rpc_types::{TransactionWithRichStatus, TxRichStatus};
 pub use protocol::db::{DBDriver, DBInfo, SimpleBlock, SimpleTransaction};
 
@@ -170,7 +172,7 @@ pub trait Storage {
         type_hashes: Option<Script>,
         block_range: Option<Range>,
         pagination: PaginationRequest,
-    ) -> Result<PaginationResponse<Transaction>>;
+    ) -> Result<PaginationResponse<indexer::Transaction>>;
 
     /// Get the block count.
     async fn indexer_synced_count(&self) -> Result<u64>;
@@ -179,7 +181,7 @@ pub trait Storage {
     async fn block_count(&self) -> Result<u64>;
 }
 
-#[derive(Clone, Hash, Debug)]
+#[derive(Clone, Debug)]
 pub struct TransactionWrapper {
     pub transaction_with_status: TransactionWithStatus,
     pub transaction_view: TransactionView,
@@ -191,12 +193,13 @@ pub struct TransactionWrapper {
 
 impl std::convert::From<TransactionWrapper> for TransactionWithRichStatus {
     fn from(tx: TransactionWrapper) -> Self {
+        let tx_status: TxStatus = tx.transaction_with_status.tx_status.into();
         TransactionWithRichStatus {
-            transaction: tx.transaction_with_status.transaction,
+            transaction: tx.transaction_with_status.transaction.map(Into::into),
             tx_status: TxRichStatus {
-                status: tx.transaction_with_status.tx_status.status,
-                block_hash: tx.transaction_with_status.tx_status.block_hash,
-                reason: tx.transaction_with_status.tx_status.reason,
+                status: tx_status.status,
+                block_hash: tx_status.block_hash,
+                reason: tx_status.reason,
                 timestamp: Some(tx.timestamp.into()),
             },
         }

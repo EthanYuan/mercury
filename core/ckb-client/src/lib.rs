@@ -6,7 +6,7 @@ pub use client::CkbRpcClient;
 use common::{async_trait, Result};
 
 use ckb_jsonrpc_types::{
-    BlockView, EpochView, LocalNode, RawTxPool, TransactionWithStatus, Uint64,
+    BlockView, EpochView, LocalNode, RawTxPool, TransactionWithStatusResponse, Uint64,
 };
 use ckb_types::{core, H256};
 
@@ -21,7 +21,7 @@ pub trait CkbRpc: Sync + Send + 'static {
     async fn get_transactions(
         &self,
         hashes: Vec<H256>,
-    ) -> Result<Vec<Option<TransactionWithStatus>>>;
+    ) -> Result<Vec<Option<TransactionWithStatusResponse>>>;
 
     async fn get_blocks_by_number(
         &self,

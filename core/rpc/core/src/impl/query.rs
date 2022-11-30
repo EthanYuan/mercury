@@ -531,7 +531,8 @@ impl<C: CkbRpc> MercuryRpcImpl<C> {
             .transaction
             .clone()
             .expect("impossible: get transaction fail")
-            .hash;
+            .hash();
+        let tx_hash = H256::from_slice(tx_hash.as_slice()).expect("Byte32 to H256c");
 
         for input_cell in &tx_wrapper.input_cells {
             let mut input_records = self

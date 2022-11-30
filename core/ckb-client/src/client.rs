@@ -4,7 +4,8 @@ use common::{async_trait, MercuryError, Result};
 use core_synchronization::SyncAdapter;
 
 use ckb_jsonrpc_types::{
-    BlockView, EpochView, JsonBytes, LocalNode, RawTxPool, TransactionWithStatus, Uint32, Uint64,
+    BlockView, EpochView, JsonBytes, LocalNode, RawTxPool, TransactionWithStatusResponse, Uint32,
+    Uint64,
 };
 use ckb_types::{core, core::BlockNumber, packed, prelude::Entity, H256};
 use jsonrpc_core::types::{
@@ -65,7 +66,7 @@ impl CkbRpc for CkbRpcClient {
     async fn get_transactions(
         &self,
         hashes: Vec<H256>,
-    ) -> Result<Vec<Option<TransactionWithStatus>>> {
+    ) -> Result<Vec<Option<TransactionWithStatusResponse>>> {
         if hashes.is_empty() {
             return Ok(Vec::new());
         }

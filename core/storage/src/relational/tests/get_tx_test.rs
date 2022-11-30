@@ -24,7 +24,15 @@ async fn test_get_txs() {
         .response;
     let tx_hashes_from_db: Vec<H256> = txs_from_db
         .iter()
-        .map(|tx| tx.transaction_with_status.transaction.clone().unwrap().hash)
+        .map(|tx| {
+            let tx_hash = tx
+                .transaction_with_status
+                .transaction
+                .clone()
+                .unwrap()
+                .hash();
+            H256::from_slice(tx_hash.as_slice()).unwrap()
+        })
         .collect();
 
     assert_eq!(2, txs_from_db.len());
@@ -55,7 +63,17 @@ async fn test_get_txs_by_block_range() {
         .response;
     let tx_hashes_from_db: Vec<H256> = txs_from_db
         .iter()
-        .map(|tx| tx.transaction_with_status.transaction.clone().unwrap().hash)
+        .map(|tx| {
+            H256::from_slice(
+                tx.transaction_with_status
+                    .transaction
+                    .clone()
+                    .unwrap()
+                    .hash()
+                    .as_slice(),
+            )
+            .unwrap()
+        })
         .collect();
 
     let mut txs_from_json: Vec<ckb_jsonrpc_types::TransactionView> = vec![];

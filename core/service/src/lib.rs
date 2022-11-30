@@ -8,7 +8,7 @@ use core_rpc_types::{SyncProgress, SyncState};
 use core_storage::{DBDriver, RelationalStorage, Storage};
 use core_synchronization::{Synchronization, TASK_LEN};
 
-use ckb_jsonrpc_types::{RawTxPool, TransactionWithStatus};
+use ckb_jsonrpc_types::{Either, RawTxPool, TransactionWithStatusResponse};
 use ckb_types::core::{BlockNumber, BlockView, EpochNumberWithFraction, RationalU256};
 use ckb_types::{packed, H256};
 use jsonrpsee_http_server::{HttpServerBuilder, HttpServerHandle};
@@ -348,10 +348,15 @@ async fn handle_raw_tx_pool(ckb_client: &CkbRpcClient, raw_pool: RawTxPool) {
     if let Ok(res) = ckb_client.get_transactions(hashes).await {
         for item in res.iter() {
             match item {
-                Some(TransactionWithStatus {
+                Some(TransactionWithStatusResponse {
                     transaction: Some(tx_view),
                     ..
                 }) => {
+                    let tx_view = match &tx_view.inner {
+                        Either::Left(t) => t,
+                        _ => unreachable!(),
+                    };
+
                     tx_view.inner.inputs.iter().for_each(|input| {
                         input_set.insert(input.previous_output.clone().into());
                     });
