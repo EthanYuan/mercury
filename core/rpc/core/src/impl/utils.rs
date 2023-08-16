@@ -4,7 +4,7 @@ use crate::{error::CoreError, InnerResult, MercuryRpcImpl};
 pub use ckb_dao_utils::extract_dao_data;
 use ckb_types::core::{BlockNumber, Capacity, EpochNumberWithFraction, RationalU256};
 use ckb_types::packed::{OutPoint, Script};
-use ckb_types::{bytes::Bytes, packed, prelude::*, H160, H256, U256};
+use ckb_types::{bytes::Bytes, packed, prelude::*, H160, H256};
 use common::address::is_secp256k1;
 use common::hash::{blake2b_160, blake2b_256_to_160};
 use common::lazy::{
@@ -1100,9 +1100,9 @@ impl<C: CkbRpc> MercuryRpcImpl<C> {
         unlock_gap: RationalU256,
     ) -> bool {
         if let Some(end) = end {
-            end.saturating_sub(from) > unlock_gap
+            end.saturating_sub(from) >= unlock_gap
         } else {
-            (**CURRENT_EPOCH_NUMBER.load()).clone().saturating_sub(from) > unlock_gap
+            (**CURRENT_EPOCH_NUMBER.load()).clone().saturating_sub(from) >= unlock_gap
         }
     }
 
@@ -1664,18 +1664,11 @@ impl<C: CkbRpc> MercuryRpcImpl<C> {
                         )
                         .await?;
 
-                    let tip_epoch_number = (**CURRENT_EPOCH_NUMBER.load()).clone();
                     let withdrawing_cells = cells
                         .into_iter()
                         .filter(|cell| {
                             cell.cell_data != Box::new([0u8; 8]).to_vec()
                                 && cell.cell_data.len() == 8
-                        })
-                        .filter(|cell| {
-                            EpochNumberWithFraction::from_full_value(cell.epoch_number)
-                                .to_rational()
-                                + U256::from(4u64)
-                                < tip_epoch_number
                         })
                         .collect::<Vec<_>>();
                     let mut dao_cells = vec![];

@@ -164,14 +164,22 @@ pub(crate) fn issue_udt_1() -> Result<()> {
 }
 
 pub(crate) fn fast_forward_epochs(number: usize) -> Result<()> {
-    generate_blocks(GENESIS_EPOCH_LENGTH as usize * number + 1)
+    generate_blocks(GENESIS_EPOCH_LENGTH as usize * number)
 }
 
 pub(crate) fn generate_blocks(number: usize) -> Result<()> {
     let ckb_rpc_client = CkbRpcClient::new(CKB_URI.to_string());
-    let mut block_hash: H256 = H256::default();
-    for _ in 0..number {
-        block_hash = ckb_rpc_client.generate_block()?;
+    let mut block_hash = ckb_rpc_client.generate_block()?;
+    for _ in 1..number {
+        loop {
+            let tmp = ckb_rpc_client.generate_block()?;
+            if tmp != block_hash {
+                block_hash = tmp;
+                break;
+            } else {
+                println!("Duplicate hash!");
+            }
+        }
     }
     let mercury_rpc_client = MercuryRpcClient::new(MERCURY_URI.to_string());
     mercury_rpc_client.wait_block(block_hash);
@@ -179,7 +187,7 @@ pub(crate) fn generate_blocks(number: usize) -> Result<()> {
 }
 
 pub(crate) fn aggregate_transactions_into_blocks() -> Result<()> {
-    generate_blocks(3)
+    generate_blocks(4)
 }
 
 pub(crate) fn send_transaction_to_ckb(tx: Transaction) -> Result<H256> {

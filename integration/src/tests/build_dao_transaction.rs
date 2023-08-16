@@ -58,7 +58,7 @@ fn test_dao_by_address() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {
@@ -69,7 +69,7 @@ fn test_dao_by_address() {
     let tx = mercury_client.build_dao_claim_transaction(claim_payload.clone());
     assert!(tx.is_err());
 
-    fast_forward_epochs(4).unwrap();
+    fast_forward_epochs(3).unwrap();
 
     // withdraw
     let tx = mercury_client
@@ -88,7 +88,7 @@ fn test_dao_by_address() {
     assert!(balance.balances[0].frozen < 99_0000_0000u128.into());
 
     // claim
-    fast_forward_epochs(176).unwrap();
+    fast_forward_epochs(177).unwrap();
 
     // get_balance
     let balance = mercury_client.get_balance(balance_payload.clone()).unwrap();
@@ -142,7 +142,7 @@ fn test_dao_pool_money() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {
@@ -293,7 +293,7 @@ fn test_dao_by_out_point() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {

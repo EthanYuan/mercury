@@ -268,7 +268,7 @@ fn test_dao_get_balance() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {

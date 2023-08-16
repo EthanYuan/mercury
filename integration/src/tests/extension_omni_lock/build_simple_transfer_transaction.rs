@@ -127,7 +127,6 @@ fn test_omni_simple_transfer_udt_to_provide_capacity() {
     };
     let to_balance = mercury_client.get_balance(payload).unwrap();
     assert_eq!(to_balance.balances.len(), 3);
-    println!("{:?}", to_balance.balances);
     assert_eq!(to_balance.balances[0].occupied, 146_0000_0000u128.into());
     assert_eq!(to_balance.balances[1].free, 100u128.into());
     assert!(103_0000_0000u128 < to_balance.balances[2].free.into());

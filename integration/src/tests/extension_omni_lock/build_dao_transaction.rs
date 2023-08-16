@@ -60,7 +60,7 @@ fn test_omni_dao_by_address() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {
@@ -282,7 +282,7 @@ fn test_omni_dao_by_out_point() {
         fee_rate: None,
     };
     let tx = mercury_client.build_dao_withdraw_transaction(withdraw_payload.clone());
-    assert!(tx.is_err());
+    assert!(tx.is_ok());
 
     // claim
     let claim_payload = DaoClaimPayload {

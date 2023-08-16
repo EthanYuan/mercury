@@ -10,7 +10,7 @@ use ckb_jsonrpc_types::TransactionView as JsonTransactionView;
 use ckb_types::core::{
     Capacity, EpochNumberWithFraction, ScriptHashType, TransactionBuilder, TransactionView,
 };
-use ckb_types::{bytes::Bytes, constants::TX_VERSION, packed, prelude::*, H160, H256, U256};
+use ckb_types::{bytes::Bytes, constants::TX_VERSION, packed, prelude::*, H160, H256};
 use common::address::{is_acp, is_pw_lock, is_secp256k1};
 use common::hash::blake2b_256_to_160;
 use common::lazy::{
@@ -179,15 +179,9 @@ impl<C: CkbRpc> MercuryRpcImpl<C> {
         let mut set = HashSet::new();
         deposit_cells.retain(|i| set.insert(i.clone()));
 
-        let tip_epoch_number = (**CURRENT_EPOCH_NUMBER.load()).clone();
         let deposit_cells = deposit_cells
             .into_iter()
             .filter(|cell| cell.cell_data == Box::new([0u8; 8]).to_vec())
-            .filter(|cell| {
-                (EpochNumberWithFraction::from_full_value(cell.epoch_number).to_rational()
-                    + U256::from(4u64))
-                    < tip_epoch_number
-            })
             .collect::<Vec<_>>();
         if deposit_cells.is_empty() {
             return Err(CoreError::CannotFindDepositCell.into());
@@ -333,16 +327,10 @@ impl<C: CkbRpc> MercuryRpcImpl<C> {
         let mut set = HashSet::new();
         withdrawing_cells.retain(|i| set.insert(i.clone()));
 
-        let tip_epoch_number = (**CURRENT_EPOCH_NUMBER.load()).clone();
         let withdrawing_cells = withdrawing_cells
             .into_iter()
             .filter(|cell| {
                 cell.cell_data != Box::new([0u8; 8]).to_vec() && cell.cell_data.len() == 8
-            })
-            .filter(|cell| {
-                EpochNumberWithFraction::from_full_value(cell.epoch_number).to_rational()
-                    + U256::from(4u64)
-                    < tip_epoch_number
             })
             .collect::<Vec<_>>();
         if withdrawing_cells.is_empty() {
