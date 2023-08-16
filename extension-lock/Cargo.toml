@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 bitflags = "1.3.2"
-ckb-jsonrpc-types = "0.105"
-ckb-sdk = "2.3.1"
-ckb-types = "0.105"
+ckb-jsonrpc-types = "0.108"
+ckb-sdk = "2.5.0"
+ckb-types = "0.108"
 inventory = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 

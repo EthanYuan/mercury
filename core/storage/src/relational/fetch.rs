@@ -253,6 +253,7 @@ impl RelationalStorage {
                 let transaction_with_status = TransactionWithStatus::with_committed(
                     Some(transaction_view.clone()),
                     bytes_to_h256(tx.get("block_hash")),
+                    None,
                 );
 
                 let is_cellbase = tx.get::<i32, _>("tx_index") == 0;
