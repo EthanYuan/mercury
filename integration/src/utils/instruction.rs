@@ -14,7 +14,7 @@ use crate::utils::signer::sign_transaction;
 
 use anyhow::Result;
 use ckb_jsonrpc_types::{OutPoint, OutputsValidator, Transaction};
-use ckb_types::H256;
+use ckb_types::{core::EpochNumberWithFraction, H256};
 use common::lazy::{
     ACP_CODE_HASH, CHEQUE_CODE_HASH, DAO_CODE_HASH, PW_LOCK_CODE_HASH, SECP256K1_CODE_HASH,
     SUDT_CODE_HASH,
@@ -163,9 +163,9 @@ pub(crate) fn issue_udt_1() -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn fast_forward_epochs(number: usize) -> Result<()> {
-    generate_blocks(GENESIS_EPOCH_LENGTH as usize * number)
-}
+// pub(crate) fn fast_forward_epochs(number: usize) -> Result<()> {
+//     generate_blocks(GENESIS_EPOCH_LENGTH as usize * number)
+// }
 
 pub(crate) fn generate_blocks(number: usize) -> Result<()> {
     let ckb_rpc_client = CkbRpcClient::new(CKB_URI.to_string());
@@ -183,6 +183,26 @@ pub(crate) fn generate_blocks(number: usize) -> Result<()> {
     }
     let mercury_rpc_client = MercuryRpcClient::new(MERCURY_URI.to_string());
     mercury_rpc_client.wait_block(block_hash);
+    Ok(())
+}
+
+pub(crate) fn fast_forward_epochs(epochs_to_skip: usize) -> Result<()> {
+    println!("fast forward epochs...");
+
+    let ckb_rpc_client = CkbRpcClient::new(CKB_URI.to_string());
+    let current_epoch = ckb_rpc_client.fast_forward_epochs((epochs_to_skip as u64).into())?;
+    let current_epoch = EpochNumberWithFraction::from_full_value(current_epoch.into());
+
+    println!(
+        "current epoch is {}({}/{})",
+        current_epoch.number(),
+        current_epoch.index(),
+        current_epoch.length()
+    );
+
+    let tip = ckb_rpc_client.get_tip_block_number()?;
+    let mercury_rpc_client = MercuryRpcClient::new(MERCURY_URI.to_string());
+    mercury_rpc_client.wait_block_by_number(tip);
     Ok(())
 }
 

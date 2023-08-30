@@ -1,7 +1,7 @@
 use crate::const_definition::RPC_TRY_INTERVAL_SECS;
 
 use anyhow::{anyhow, Result};
-use ckb_jsonrpc_types::{EpochView, LocalNode, OutputsValidator, Transaction};
+use ckb_jsonrpc_types::{EpochView, LocalNode, OutputsValidator, Transaction, Uint64};
 use ckb_types::H256;
 use core_rpc_types::{
     AdjustAccountPayload, BlockInfo, DaoClaimPayload, DaoDepositPayload, DaoWithdrawPayload,
@@ -33,12 +33,20 @@ impl CkbRpcClient {
         request(&self.client, "local_node_info", ())
     }
 
+    pub fn get_tip_block_number(&self) -> Result<Uint64> {
+        request(&self.client, "get_tip_block_number", ())
+    }
+
     pub fn get_current_epoch(&self) -> Result<EpochView> {
         request(&self.client, "get_current_epoch", ())
     }
 
     pub fn generate_block(&self) -> Result<H256> {
         request(&self.client, "generate_block", ())
+    }
+
+    pub fn fast_forward_epochs(&self, epochs_to_skip: Uint64) -> Result<Uint64> {
+        request(&self.client, "fast_forward_epochs", vec![epochs_to_skip])
     }
 
     pub fn send_transaction(
@@ -72,10 +80,14 @@ impl MercuryRpcClient {
         request(&self.client, "get_sync_state", ())
     }
 
-    pub fn get_block_info(&self, block_hash: H256) -> Result<BlockInfo> {
+    pub fn get_block_info(
+        &self,
+        block_hash: Option<H256>,
+        block_number: Option<Uint64>,
+    ) -> Result<BlockInfo> {
         let payload = GetBlockInfoPayload {
-            block_hash: Some(block_hash),
-            block_number: None,
+            block_hash,
+            block_number,
         };
         request(&self.client, "get_block_info", vec![payload])
     }
@@ -160,7 +172,13 @@ impl MercuryRpcClient {
     }
 
     pub fn wait_block(&self, block_hash: H256) {
-        while self.get_block_info(block_hash.clone()).is_err() {
+        while self.get_block_info(Some(block_hash.clone()), None).is_err() {
+            sleep(Duration::from_secs(RPC_TRY_INTERVAL_SECS))
+        }
+    }
+
+    pub fn wait_block_by_number(&self, block_number: Uint64) {
+        while self.get_block_info(None, Some(block_number)).is_err() {
             sleep(Duration::from_secs(RPC_TRY_INTERVAL_SECS))
         }
     }
@@ -230,7 +248,6 @@ fn build_request<T: Serialize>(method: &str, params: T) -> Result<Request> {
 
 fn parse_params<T: Serialize>(params: &T) -> Result<Params> {
     let json = serde_json::to_value(params)?;
-
     match json {
         Value::Array(vec) => Ok(Params::Array(vec)),
         Value::Object(map) => Ok(Params::Map(map)),
