@@ -163,9 +163,9 @@ pub(crate) fn issue_udt_1() -> Result<()> {
     Ok(())
 }
 
-// pub(crate) fn fast_forward_epochs(number: usize) -> Result<()> {
-//     generate_blocks(GENESIS_EPOCH_LENGTH as usize * number)
-// }
+pub(crate) fn fast_forward_epochs(number: usize) -> Result<()> {
+    generate_epochs(number)
+}
 
 pub(crate) fn generate_blocks(number: usize) -> Result<()> {
     let ckb_rpc_client = CkbRpcClient::new(CKB_URI.to_string());
@@ -186,11 +186,12 @@ pub(crate) fn generate_blocks(number: usize) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn fast_forward_epochs(epochs_to_skip: usize) -> Result<()> {
+pub(crate) fn generate_epochs(num_epochs: usize) -> Result<()> {
     println!("fast forward epochs...");
 
     let ckb_rpc_client = CkbRpcClient::new(CKB_URI.to_string());
-    let current_epoch = ckb_rpc_client.fast_forward_epochs((epochs_to_skip as u64).into())?;
+    let num_epochs = EpochNumberWithFraction::new(num_epochs as u64, 0, 1);
+    let current_epoch = ckb_rpc_client.generate_epochs(num_epochs.full_value().into())?;
     let current_epoch = EpochNumberWithFraction::from_full_value(current_epoch.into());
 
     println!(

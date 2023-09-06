@@ -45,8 +45,8 @@ impl CkbRpcClient {
         request(&self.client, "generate_block", ())
     }
 
-    pub fn fast_forward_epochs(&self, epochs_to_skip: Uint64) -> Result<Uint64> {
-        request(&self.client, "fast_forward_epochs", vec![epochs_to_skip])
+    pub fn generate_epochs(&self, num_epochs: Uint64) -> Result<Uint64> {
+        request(&self.client, "generate_epochs", vec![num_epochs])
     }
 
     pub fn send_transaction(
